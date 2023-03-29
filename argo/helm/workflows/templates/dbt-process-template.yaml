@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  namespace: argo
+  name: dbt-process-template
+  annotations:
+    workflows.argoproj.io/description: >-
+      This workflow template runs a dbt task on a repo
+spec:
+  templates:
+  - name: dbt-process
+    inputs:
+      artifacts:
+      - name: repo-data
+        path: /usr/app
+        s3:
+          key: "{{`{{inputs.parameters.repo}}`}}/{{`{{inputs.parameters.repo-branch}}`}}/{{ `{{workflow.uid}}` }}"
+      parameters:
+      - name: repo
+      
+      - name: repo-branch
+      - name: dbt-task
+        default: "build"
+      - name: dbt-project
+        default: "argo"
+
+    container:
+      image: dbt  #unable to find the image from registry
+      # image: localhost:5001/dbt  # Also, doesn't work
+      # image: ctlptl-registry:5001/dbt  # Also, doesn't work
+      command: ["dbt"]
+      args: ["{{ `{{inputs.parameters.dbt-task}}` }}", "--project-dir", "/usr/app/{{ `{{inputs.parameters.dbt-project}}` }}"]
+    resources:
+      requests:
+        memory: 250Mi
+        cpu: 4m
+    activeDeadlineSeconds: 300

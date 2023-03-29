@@ -1,0 +1,84 @@
+S3_ACCESS_KEY = "minio-sa"
+S3_SECRET_KEY = "minio123"
+GITHUB_ACCESS_TOKEN = os.getenv("GITHUB_ACCESS_TOKEN")
+default_registry(
+    'localhost:5001',
+    host_from_cluster='ctlptl-registry:5000'
+)
+
+docker_build('dbt-argo', '.', dockerfile='dockerfile', target='final', match_in_env_vars=True,extra_tag=["dbt-argo:local", "ctlptl-registry:5000/dbt-argo:latest"])
+
+k8s_yaml(blob("""
+apiVersion: v1
+kind: Secret
+data:
+    .dockerconfigjson: eyJhdXRocyI6eyJjdGxwdGwtcmVnaXN0cnk6NTAwMCI6eyJ1c2VybmFtZSI6IiIsInBhc3N3b3JkIjoiIiwiZW1haWwiOiJyb290QGxvY2FsaG9zdCIsImF1dGgiOiIifX19Cg==
+metadata:
+    name: ctlptl-regcred
+    namespace: argo
+type: kubernetes.io/dockerconfigjson
+---
+apiVersion: v1
+kind: Secret
+metadata:
+    name: argo-workflow.service-account-token
+    namespace: argo
+    annotations:
+        kubernetes.io/service-account.name: argo-workflow
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: Secret
+metadata:
+    name: argo-secrets
+    namespace: argo
+type: Opaque
+stringData:
+    S3_ARTIFACT_ACCESS_KEY: {s3_access}
+    S3_ARTIFACT_SECRET_KEY: {s3_secret}
+    GITHUB_ACCESS_TOKEN: {github_access_token}
+""".format(
+    s3_access=S3_ACCESS_KEY,
+    s3_secret=S3_SECRET_KEY,
+    github_access_token=GITHUB_ACCESS_TOKEN,
+)))
+
+# Install Minio Object storage
+# https://github.com/minio/minio/tree/master/helm/minio
+
+load('ext://namespace', 'namespace_create')
+namespace_create('minio')
+load('ext://helm_remote', 'helm_remote')
+values = [
+    "./minio/values.yaml",
+            ]
+helm_remote('minio', namespace='minio', repo_url='https://charts.min.io/', values=values)
+k8s_resource("minio", port_forwards=['9001','9000'], labels="object", resource_deps=[])
+
+
+# Install Argo Workflows
+# https://github.com/argoproj/argo-helm/tree/main/charts/argo-workflows
+load('ext://namespace', 'namespace_create')
+namespace_create('argo')
+load('ext://helm_remote', 'helm_remote')
+values = [
+    "./argo/values.yaml",
+            ]
+helm_remote('argo-workflows', namespace='argo', repo_url='https://argoproj.github.io/argo-helm', values=values, version='0.22.9')
+k8s_resource("argo-workflows-server", port_forwards=['2746'],  labels="argo")
+k8s_resource("argo-workflows-workflow-controller", labels="argo")
+
+# Install Argo Workflows Templates
+k8s_yaml(helm('./argo/helm/workflows'))
+
+
+script = """\
+CREATE_TOKEN="Bearer $(kubectl create token argo-workflows-server -n argo)"
+echo $CREATE_TOKEN > ./.argo-token.txt
+"""
+local_resource("create-argo-server-token", script, resource_deps=["argo-workflows-server"],  labels="argo")
+
+patch = """\
+kubectl patch serviceaccount argo-workflow -p '{"imagePullSecrets": [{"name": "ctlptl-regcred"}]}' -n argo
+"""
+local_resource("patch-argo-workflow-sa", patch, resource_deps=["argo-workflows-server"],  labels="argo")

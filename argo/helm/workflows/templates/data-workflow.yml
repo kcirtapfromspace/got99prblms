@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: data-workflow
+  namespace: argo
+  annotations:
+    workflows.argoproj.io/description: >-
+      This workflow will pull a GitHub repository, and then run dbt commands on
+      the repository. It will then send a Slack notification with the results of
+      the workflow.
+spec:
+  serviceAccountName: argo-workflow
+  entrypoint: dag
+  arguments:
+    parameters:
+    - name: repo
+      value: "kcirtapfromspace/database_thing"  # Replace this with the actual repository URL
+    - name: repo-branch
+      value: "go-superduck"  # Replace this with the desired branch
+    - name: enableSlackNotifications
+      value: "false"  # Set to "true" to enable notifications, "false" to skip notifications
+    - name: dbt-project
+      value: "lakehouse_demo"
+  templates:
+  - name: dag
+    dag:
+      tasks:
+      - name: pull-github-repo
+        templateRef:
+          name: pull-github-repo-template
+          template: pull-github-repo
+        arguments:
+          parameters:
+          - name: repo
+            value: "{{ `{{workflow.parameters.repo}}` }}"
+          - name: repo-branch
+            value: "{{ `{{workflow.parameters.repo-branch}}` }}"
+      - name: dbt-build
+        templateRef:
+          name: dbt-process-template
+          template: dbt-process
+        dependencies: [pull-github-repo]
+        arguments:
+          parameters:
+          - name: repo
+            value: "{{ `{{workflow.parameters.repo}}` }}"
+          - name: repo-branch
+            value: "{{ `{{workflow.parameters.repo-branch}}` }}"
+          - name: dbt-project
+            value: "{{ `{{workflow.parameters.dbt-project}}` }}"
+

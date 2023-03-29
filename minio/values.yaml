@@ -1,0 +1,95 @@
+clusterDomain: miniocluster.local
+
+## Set default image, imageTag, and imagePullPolicy. mode is used to indicate the
+##
+image:
+  repository: quay.io/minio/minio
+  tag: RELEASE.2023-02-10T18-48-39Z
+  pullPolicy: IfNotPresent
+
+mcImage:
+  repository: quay.io/minio/mc
+  tag: RELEASE.2023-01-28T20-29-38Z
+  pullPolicy: IfNotPresent
+
+mode: standalone ## other supported values are "standalone"
+## Internal port number for MinIO S3 API container
+## Change service.port to change external port number
+minioAPIPort: "9000"
+
+## Internal port number for MinIO Browser Console container
+## Change consoleService.port to change external port number
+minioConsolePort: "9001"
+## Set default rootUser, rootPassword
+## AccessKey and secretKey is generated when not set
+## Distributed MinIO ref: https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html
+##
+rootUser: "rootuser"
+rootPassword: "rootpass123"
+# Number of MinIO containers running
+replicas: 1
+## Enable persistence using Persistent Volume Claims
+## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
+##
+persistence:
+  enabled: false
+
+users:
+  - accessKey: minio
+    secretKey: minio123
+    policy: consoleAdmin
+
+## Additional Annotations for the Kubernetes Job makeUserJob
+makeUserJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  # Command to run after the main command on exit
+  exitCommand: ""
+  
+## List of service accounts to be created after minio install
+##
+svcaccts:
+  ## accessKey, secretKey and parent user to be assigned to the service accounts
+  ## Add new service accounts as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management/minio-user-management.html#service-accounts
+  - accessKey: minio-sa
+    secretKey: minio123
+    user: minio
+
+
+makeServiceAccountJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  # Command to run after the main command on exit
+  exitCommand: ""
+
+## List of buckets to be created after minio install
+##
+buckets:
+    # Name of the bucket
+  - name: argo-artifacts
+    policy: public
+    purge: false
+    versioning: false
+    objectlocking: false
+
+## Additional Annotations for the Kubernetes Job makeBucketJob
+makeBucketJob:
+  securityContext:
+    enabled: false
+    runAsUser: 1000
+    runAsGroup: 1000
+  resources:
+    requests:
+      memory: 128Mi
+  # Command to run after the main command on exit
+  exitCommand: ""
