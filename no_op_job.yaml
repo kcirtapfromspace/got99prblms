@@ -12,3 +12,4 @@ spec:
       containers:
       - name: no-op-dbt
         image: dbt-argo:latest
+      restartPolicy: Never

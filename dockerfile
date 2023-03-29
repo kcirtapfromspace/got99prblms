@@ -1,1 +1,1 @@
-FROM ghcr.io/dbt-labs/dbt-all:latest
+FROM  ghcr.io/dbt-labs/dbt-core:latest

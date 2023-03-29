@@ -6,7 +6,7 @@ default_registry(
     host_from_cluster='ctlptl-registry:5000'
 )
 
-docker_build('dbt-argo', '.', dockerfile='dockerfile', target='final', match_in_env_vars=True,extra_tag=["dbt-argo:local", "ctlptl-registry:5000/dbt-argo:latest"])
+docker_build('dbt-argo', '.', dockerfile='dockerfile', extra_tag=["dbt-argo:local", "ctlptl-registry:5000/dbt-argo:latest"])
 
 k8s_yaml(blob("""
 apiVersion: v1
@@ -70,6 +70,7 @@ k8s_resource("argo-workflows-workflow-controller", labels="argo")
 
 # Install Argo Workflows Templates
 k8s_yaml(helm('./argo/helm/workflows'))
+k8s_yaml(kustomize("./"))
 
 
 script = """\
